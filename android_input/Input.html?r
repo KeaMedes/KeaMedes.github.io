@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<head>
+ <title>Chapter 12 - The Android Input Architecture</title>
+<style>
+ .noborder { border : 0px}
+ .title { font-size : x-large ; text-align : center ; text-decoration : underline; }
+ .output { font-size : 9pt; padding-left : 10px; padding-right: 10px; padding-top: 5px; padding-bottom : 5px; border : 1px solid black;  background-color : black ; color : #00FF00; overflow : auto; width : 55em; }
+ .table {  border-spacing : 0px; padding : 20px;}
+ .table th { border : 1px solid black; padding-left : 20px ; padding-right : 20px; }
+ .table td { border : 1px solid black; }
+ .typed { font-weight : bold; }
+ .path { font-family : Verdana; font-size : smaller;}
+ .listing { padding-left : 10px; padding-right : 10px; padding-top: 2px; padding-bottom : 2px;overflow : auto;background-color : #ddebda; margin-left :auto; margin-right : auto; width : 90%}
+ .superscript { color : red  ;vertical-align : super; font-size : 8pt; }
+ .reference { color : red  ;vertical-align : super; font-size : 8pt; }
+ .note { border : 1px solid red; padding : 10px; width: 50%; margin-left: auto; margin-right : auto; background-color : yellow; box-shadow : 5px 5px 2px #888;}
+
+ .boxedComponent { border : 1px solid black; padding : 2px; text-align : center}
+ p { text-indent : 2em;}
+ .boxed { border : 1px solid black; padding : 2px;}
+ .leftBorder { border-left : 1px solid black; padding-left : 5px;}
+ .padded {margin-left: auto; margin-right : auto;padding : 10px; }
+ figcaption { border-top : 1px solid white; margin-top : 10px;  margin-left: auto; margin-right: auto; font-size : smaller;}
+ .black { color : black ; border-top: 1px solid black;}
+ .bordered { border : 1px solid black;}
+ .rowBordered { border-bottom : 1px solid black;}
+ .annotation { color : yellow ; }
+ .jtoolAnnotation { color : green ; }
+ .footnote { vertical-align : super; font-size : smaller }
+ .box { border : 1px solid black; width : 100px; text-align: center;}
+ .illus { border-spacing : 0px;}
+ .illus TD { padding-left : 10px;}
+ .centered { text-align : center;}
+ 
+ .file { font-family : lucida ;}
+
+ .listingCaption { border-top : 1px solid black; color : black;}
+.upperdash { border-top : 1px dashed;}
+ .experiment { padding: 20px; border : 1px solid black; }
+
+ .leftPad { padding-left : 10px;}
+ .rightPad { padding-right : 10px;}
+ figure { border : 1px solid black ; padding: 5px;}
+ article { width : 90% ; margin-left : auto ; margin-right : auto;}
+ .boxeDiv { margin-left : auto; margin-right : auto; border : 1px solid black; background : silver; color : black; padding : 10px; width : 60%; margin-top : 20px; margin-bottom : 20px; box-shadow: 10px 10px 5px #888;}
+
+ h1 { margin-left: auto; margin-right : auto; font-size : xx-large;}
+   li { padding : 5px;}
+@media print {
+ .pageBreak { page-break-after : always; } 
+ }
+</style>
+<link rel="stylesheet" type="text/css" href="book.css" />
+
+</head>
+<body>
+<article>
+<div class="note" style="width: 90%">Note: This file is a sample chapter from the full book - "Android Internals: A confectioner's cookbook" - which can be found on <a href="http://NewAndroidBook.com/">http://NewAndroidBook.com/</a>. The chapter was made available for free as a preview of the book (think of it like Amazon's "Look Inside" :-). I encourage you to check out Technologeeks.com <a href="http://technologeeks.com/course.jl?course=Android%20Internals">Android Internals training</a>, which builds on the book and expands it further with Instructor Led Training.</p><p> You can also preorder the book by emailing preorder@NewAndroidBook.com. <br/><br/>Note some links (to other chapters in the book) will not work in this file (since it is partial), but external links will. Feedback, questions and requests are always welcome.</div>
+<section>
+<h1>Chapter XII - The Android Input Architecture</h1>
+<section>
+
+
+<p>Most users interact with their device through its touch screen. Android, however, can handle input from multiple input sources, of which the touch screen is only one. Additional sources may be a physical keyboard, a mouse, joystick or other controller, and virtually any other HID (Human Interface Devices), or even device sensors. Android provides a surprisingly elaborate stack structure, which receives input from the lower level kernel driver, translates the raw input data into a more manageable higher level event (key press, gesture, and such), and then propagates that to the active view in the foreground activity, by (eventually) invoking the callback associated with the view. On the way, Android uses both native level and Java level components. The high level view is shown in figure 11-1:
+</p>
+<figcaption><b><u>Figure 11-1:</u></b>The Android Input Stack</figcaption>
+
+<figure id="11-AndroidInputStack" style="font-size: 10pt; padding : 0px; width: 625px; height : 320px;">
+<svg width="625" height="320">
+<defs><marker id="arrowTip" viewBox="0 0 10 10" refX="1" refY="5" 
+  markerUnits="strokeWidth" orient="auto"
+  markerWidth="4" markerHeight="3">
+  <polyline points="0,0 10,5 0,10 1,5" fill="darkblue" />
+</marker></defs>
+<rect x="0" y="0" width="820" height="130" x2="800" y2="260"  stroke="black" fill="#21da53"></rect>
+<rect x="0" y="130" width="820" height="130" x2="800" y2="260"  stroke="black" fill="yellow"></rect>
+<rect x="0" y="260" width="820" height="130" x2="800" y2="460"  stroke="black" fill="silver"></rect>
+
+<text x="10" y="20">Android: Dalvik</text>
+<text x="10" y="255">Android: Native</text>
+<line x1="5" y1="260" x2="800" y2="260" stroke="black"> </line> <!-- kernel line !-->
+<text x="10" y="275">Linux Kernel</text>
+
+<rect x="150" y="270" width="150" stroke="black" fill="white" height="30"></rect>
+<text x="175" y="285">Input Device Driver</text></text>
+
+<text x="55" y="308">Interrupt</text></text>
+<line x1="102" y1="303" x2="135" y2="298"  stroke-width="2" stroke="black"> </line> 
+<line x1="135" y1="298" x2="112" y2="289"  stroke-width="2" stroke="black"> </line> 
+<line x1="112" y1="289" x2="145" y2="285"  stroke-width="2" marker-end="url(#arrowTip)" stroke="black" > </line> 
+
+
+<rect x="350" y="270" width="150" stroke="black" fill="white" height="30"></rect>
+<text x="375" y="285">Linux Input Stack</text></text>
+<line x1="300" y1="285" x2="345" y2="285"  stroke-width="2" marker-end="url(#arrowTip)" stroke="black" > </line> 
+
+<text x="365" y="255">/dev/input/eventXX</text></text>
+
+<rect x="10" y="40" width="161" stroke="black" fill="white" height="30"></rect>
+<text x="32" y="55">Application View</text>
+<rect x="10" y="70" width="161" stroke="black" fill="white" height="30"></rect>
+<text x="11" y="85">WindowInputEventReceiver</text>
+<rect x="10" y="100" width="161" stroke="black" fill="white" height="30"></rect>
+<text x="12" y="115">android.view.InputChannel</text>
+
+<rect x="10" y="130" width="161" stroke="black" fill="white" height="30"></rect>
+<text x="55" y="145">InputChannel</text>
+
+<rect x="190" y="20" width="311" stroke="black" fill="white" height="30"></rect>
+<text x="195" y="35">com.android.server.wm.WindowManagerService</text>
+
+<rect x="190" y="60" width="311" stroke="red" fill="white" height="180"></rect>
+<text x="195" y="75">com.android.server.input.InputManagerService</text>
+<line x1="5" y1="130" x2="800" y2="130" stroke="black"> </line> <!--native line !-->
+
+<text x="505" y="145">NativeInputManager</text>
+
+<rect x="190" y="130" width="150" stroke="red" fill="white" height="30"></rect>
+<text x="205" y="145">InputDispatcherPolicy</text></text>
+
+<rect x="350" y="130" width="150" stroke="red" fill="white" height="30"></rect>
+<text x="375" y="145">InputReaderPolicy</text></text>
+
+<rect x="190" y="180" width="311" stroke="red" fill="white" height="60"></rect>
+<text x="505" y="190">InputManager</text>
+
+<rect x="350" y="210" width="150" stroke="red" fill="white" height="30"></rect>
+<text x="395" y="225">EventHub</text></text>
+
+<rect x="350" y="180" width="150" stroke="red" fill="white" height="30"></rect>
+<text x="395" y="195">InputReader</text></text>
+
+<rect x="190" y="180" width="150" stroke="red" fill="white" height="30"></rect>
+<text x="215" y="195">InputDispatcher</text></text>
+
+<line x1="100" y1="190" x2="100" y2="165" stroke="black" marker-end="url(#arrowTip)" stroke-width="2"> </line> 
+<line x1="100" y1="190" x2="190" y2="190" stroke="black" stroke-width="2"/> 
+<line x1="90" y1="200" x2="185" y2="200" stroke="black" marker-end="url(#arrowTip)" stroke-width="2"> </line> 
+<line x1="90" y1="200" x2="90" y2="160" stroke="black" stroke-width="2"> </line> 
+
+
+</svg>
+</figure>
+<p>This chapter explores the Android input stack. We'll take a bottom-up approach, starting with the lower layer - provided by the device driver and the Linux kernel, through the runtime frameworks, conversion to an event, and finding the correct handler for that event. Be warned: The journey up the stack is long and arduous. But understanding it will hopefully make you gain new appreciation to just what happens when you next touch your device.
+
+</p>
+
+</section>
+<div class="QuickRef">In This Chapter:
+  <ul>
+    <li><a href="Input.html?r#kernel">The Linux Kernel Layer</a>
+	<ul><li><a href="Input.html?r#Interrupts">Interrupt Handling</li>
+	    <li><a href="Input.html?r#InputStack">Kernel Input Stack</li>
+	</ul>
+	</li>
+    <li><a href="Input.html?r#native">The Native Layer</a>
+       <ul><li><a href="Input.html?r#inputManager">InputManager</a></li>
+           <li><a href="Input.html?r#eventHub">EventHub</a></li>
+           <li><a href="Input.html?r#inputReader">InputReader</a></li>
+           <li><a href="Input.html?r#inputDispatcher">InputDispatcher</a></li>
+	   <li><a href="Input.html?r#inputflinger">InputFlinger (Android L)</a></li>
+	</ul>
+	  
+    </li>
+    <li><a href="Input.html?r#dalvik">The Dalvik Layer</a>
+	<ul><li><a href="Input.html?r#pipeline">The Input Pipeline</a></li>
+<li><a href="Input.html?r#appview">The Application View</a></li>
+	</ul>
+
+    </li>
+	<li><a href="Input.html?r#debugging">Debugging the Input Stack</a>
+	</li>
+  </ul>
+</div>
+<div class="pb">&nbsp;</div>
+<section class="Linux">
+<a id="kernel"/><h2>Input Handling at the Linux Kernel Layer</h2> 
+
+
+<a id="Interrupts"><h3>Interrupt Handling</h3></a>
+<p>An input event begins with an interrupt, which is generated when the device (touch screen, physical button, headphone jack, etc) detects the physical event. At the lowest level, this event causes electrical current, which is converted to an interrupt, which is delivered via the interrupt controller to the CPU, on one of the many <b>interrupt request lines</b> (IRQs).</p>
+<p>Linux provides a default interrupt handler in the form of <code>do_IRQ</code>. This function checks if any device drivers have "claimed" the interrupt (by calling <code>request_irq()</code>). Usually, each driver will claim the IRQ line corresponding to its device, though it is not uncommon to see interrupt lines shared between two or more drivers. A driver claiming an IRQ also supplies a callback - often referred to as an ISR (<b>I</b>nterrupt <b>S</b>ervice <b>R</b>outine), which will be invoked by <code>do_IRQ</code> when an interrupt is received on the claimed IRQ.</p>
+
+<p>You can view the interrupt lines claimed by drivers if you look at <path>/proc/interrupts</path>. This highly architecture dependent file will show you the interrupt count for interrupts which have been registered (a different file, <path>/proc/stat</path>, will show all interrupt counts). Each interrupt line is shown with the count, controller type, and registered driver name. 
+
+
+The driver names are often quite cryptic, but in some cases (such as the Galaxy S series) are well defined. The Galaxy S4 also shows a good example of multiple interrupt controllers, as shown in the following output, demonstrating some of the more interesting interrupts on the device:
+
+
+<figure class="output">
+<pre>
+shell@s4:/ $ <span class="typed">cat /proc/interrupts</span>
+           CPU0       
+ 17:          0       GIC  dg_timer
+ 18:    9245245       GIC  gp_timer           <span class="annotation"># Timer interrupt </span>
+	...
+ 34:          1       GIC  MSM_L2
+ 36:     243472       GIC  synaptics_rmi4_i2c <span class="annotation"># Touch screen</span>
+ 47:          0       GIC  pm8821_sec_irq
+ 48:     981035       GIC  msmgpio
+  ...
+<!--
+ 51:    1864387       GIC  rpm_drv
+ 52:      31459       GIC  mpm_drv
+ 53:          0       GIC  rpm_err
+ 54:      86098       GIC  pm_drv
+ 65:     220761       GIC  msm_slim_irq
+ 66:      26325       GIC  sps
+	...
+ 80:       3004       GIC  vfe
+ 81:      82105       GIC  vidc
+	...
+105:      38234       GIC  msm_rotator
+107:     567652       GIC  MDP
+111:          0       GIC  hdmi_msm_isr
+112:     538949       GIC  kgsl-3d0
+114:      13931       GIC  MIPI_DSI
+	...
+122:    2359353       GIC  smd_dev
+128:     746107       GIC  sps
+129:      26020       GIC  sps
+130:    1137197       GIC  sps
+132:      84969       GIC  msm_otg, msm_hsusb
+!-->
+134:    4960502       GIC  msm-sdcc (cmd), msm-sdcc (pio)  <span class="annotation">#</span>
+135:     950126       GIC  msm-sdcc (cmd), msm-sdcc (pio)  <span class="annotation"># Flash storage</span>
+136:    4359946       GIC  msm-sdcc (cmd), msm-sdcc (pio)  <span class="annotation">#</span>
+<!--
+	..
+183:    4485688       GIC  qup_err_intr
+185:       1920       GIC  qup_err_intr
+187:       1024       GIC  spi_qsd
+188:      76092       GIC  msm_hs_uart
+190:      49483       GIC  msm_serial_hsl0
+191:          0       GIC  qup_err_intr
+199:       3008       GIC
+203:      62247       GIC  msmdatamover
+	...
+228:     770979       GIC  qup_err_intr
+	...
+261:     295905       GIC  ehci_hcd:usb1
+269:          0       GIC  msm_iommu_nonsecure_irq, msm_iommu_nonsecure_irq
+280:          9       GIC  mobicore
+307:          0   msmgpio  mdm errfatal
+319:          4   msmgpio  mdm pbl ready
+330:       1706   msmgpio  wcd9xxx
+335:       6913   msmgpio  msm_hsic_wakeup
+337:          1   msmgpio  mdm status, hsic_peripheral_status
+!-->
+            ...
+343:        107   msmgpio  max77693-irq
+351:        517   msmgpio  bluetooth hostwake      <span class="annotation"># Bluetooth devices</span>
+353:     503146   msmgpio  bcmsdh_sdmmc
+362:     453332   msmgpio  pm8xxx_usr_irq
+365:          0   msmgpio  sii8240
+369:          0   msmgpio  sec_headset_detect      <span class="annotation"># headset jack</span>
+371:          0   msmgpio  msm_hsl_wakeup
+474:          0    pm8xxx  pm8921_overtemp_irq
+479:       3896    pm8xxx  pm8xxx_rtc_alarm
+486:          0    pm8xxx  pm8921_batt_alarm_irq
+489:          0    pm8xxx  msm_otg
+490:         63    pm8xxx  pmic8xxx_pwrkey_release <span class="annotation"># Power down</span>
+491:         63    pm8xxx  pmic8xxx_pwrkey_press   <span class="annotation"># Power up</span>
+             ...
+<!--
+492:          0    pm8xxx  restart_from_pmic
+495:          0    pm8xxx  pm8921_tempstat_irq
+512:          0    pm8xxx  pm8xxx_btm_cool_interrupt
+513:          0    pm8xxx  pm8xxx_btm_warm_interrupt
+518:     274526    pm8xxx  pm8xxx_adc_interrupt
+573:          0    pm8xxx  fuelgauge-irq
+638:          0    pm8xxx  flip_cover
+651:     172933    pm8xxx  SSP_Int
+655:         15    pm8xxx  jc isp
+660:          4    pm8xxx  bcm2079x-i2c
+!-->
+661:        579    pm8xxx  home_key                 <span class="annotation"># home button</span>
+662:       1338    pm8xxx  cypress_touchkey         <span class="annotation"># menu, back</span>
+664:          0    pm8xxx  msm-sdcc (slot)
+666:         28    pm8xxx  volume_up_key            <span class="annotation"># Volume UP</span>  
+668:         56    pm8xxx  volume_down_key          <span class="annotation"># Volume DOWN</span>
+                 ...
+<!--
+730:          0  pm8821-irq  pm8821_overtemp_irq
+735:          0  pm8821-irq  pm8821_tempstat_irq
+808:       1671   wcd9xxx  SLIMBUS Slave
+865:          8  max77693  bypass-irq           
+866:          0  max77693  battery-irq
+869:          0  max77693  wpc-int
+870:         65  max77693  chgin-irq               <span class="annotation"># Charger detect</span>
+871:          0  max77693  muic-adc
+874:          0  max77693  muic-adc1k
+875:         16  max77693  muic-chgtype
+879:         17  max77693  muic-vbvolt
+!-->
+<span class="annotation"># Inter processor (core) interrupts: Note four columns for quad-core</span>
+IPI0:          0      13962      13870      11649  CPU start interrupts
+IPI1:          0          0          0          0  Timer broadcast interrupts
+IPI2:    3947099    5539984    2449051    1427641  Rescheduling interrupts
+IPI3:       1369      12875      12846      12533  Function call interrupts
+IPI4:        402     126466     109265      91618  Single function call interrupts
+IPI5:          0          0          0          0  CPU stop interrupts
+IPI6:          0          0          0          0  CPU backtrace
+Err:          0
+</pre>
+</figure>
+
+<div class="pb">&nbsp;</div>
+<p>
+In other cases, however, like the HTC One M8, the physical keys are all grouped under one interrupt, <code>gpio_keys</code>. Another interesting feature is that on multi-core CPUs, you will actually see multiple interrupt count columns when additional cores are active. You can further control which core responds to which interrupt by writing a hexadecimal mask value to the <path>/proc/irq/<i>##</i>/smp_affinity</path>. Advanced boards may also show "IPI" (inter-processor interrupts) as well.</p>
+
+<p>You can empirically determine which IRQs are associated with which devices by viewing <path>/proc/interrupts</path> before and after triggering an interrupt from a device (for example, touching the screen, or pressing a button). A physical button press will usually result in 2 or more interrupts (corresponding to the button down and button up events), whereas swipes and other gestures may very well result in dozens or more, the same as mouse motion would on a desktop system.</p>
+
+<p>Interrupts are effectively handled at the highest possible priority. With rare exceptions, an interrupt will preempt whichever thread is executing on the CPU, as it demands the kernel's immediate attention. Desktop systems make use of this fact in some cases (for example, with the SysRQ mechanism), though a more immediate application is that, when a device is hanging, most users intuitively press buttons, tap, swipe, or otherwise try to "wake up" the device. In practice, this can, in theory, be detrimental, as more events trigger more interrupts, which can increase the system load by preempting what the CPU was doing, in favor of handling otherwise meaningless gestures. In practice, however, interrupt handling is so quick the load they introduce is fairly minimal.</p>
+
+<p>Well behaved drivers obey the strict requirements of handling IRQs - they never block, and take as little time as possible, deferring work toa software IRQ (the kernel's <code>ksoftirq</code> threads). Interrupts therefore usually have minimal effects on the system. In addition some devices can use tricks such as interrupt coalescing (firing one interrupt instead of several), and devices will not fire interrupts when the device is sleeping (for example, the touch screen, when the display is turned off).</p>
+
+
+
+<div class="pb">&nbsp;</div>
+<a id="InputStack"><h3>The Linux Input Driver Model</h3></a>
+
+<p>Android uses the standard Linux input driver model, introduced back in 2.4 and standardized in 2.6 and later. The Linux kernel documentation contains a subdirectory documenting the model and usage of its programming interfaces (<path>Documentation/input/</path>, and in particular <path>input.txt</path>). The interested reader is encouraged to consult the documentation for more detail, though we provide an overview in this section.
+</p>
+
+<p>
+A device driver responsible for an input device is required to allocate an <code>input_dev</code> structure and populate its capabilties. This structure is defined in <code>&lt;linux/input.h&gt;</code> and shown in figure figInputDev, along with the <code>ioctl(2)</code> codes which can be used to retrieve selected fields from user mode:
+</p>
+
+<figure id="figInputDev">
+<table  class="illus" style="font-size : smaller" cellpadding="4">
+<thead>
+<tr><th>field</th><th>contains</th><th><code>ioctl(2)</code> code</th></tr>
+</thead>
+<tr> <td class="box">name</td><td>device display name</td> <td>EVIOCGNAME</td></tr>
+<tr> <td class="box">phys</td><td>device physical path in /sys </td><td>EVIOCGPHYS</td></tr>
+<tr> <td class="box">uniq</td><td>unique code, if any</td><td>EVIOCGUNIQ</td></tr>
+<tr> <td class="box">id</td><td>struct input_id</td></tr>
+<tr><td class="box">propbit</td><td>device properties and quirks</td><td>EVIOCGPROP</td></tr>
+<tr><td class="box">evbit</td><td>EV_ event types supported by device</td></tr>
+<tr><td class="box">keybit</td><td>keys/buttons this device has</td><td>EVIOCGBIT(EV_KEY..)</td></tr>
+<tr><td class="box">relbit</td><td>relative axes for the device</td><td>EVIOCGBIT(EV_REL..)</td></tr>
+<tr><td class="box">absbit</td><td>absolute axes for the device</td><td>EVIOCGBIT(EV_ABS..)</td></tr>
+<tr><td class="box">mscbit</td><td>miscellaneous events supported by device</td><td>EVIOCGBIT(EV_MSC..)</td></tr>
+<tr><td class="box">ledbit</td><td>LEDs present on the device</td><td>EVIOCGBIT(EV_LED..)</td></tr>
+<tr><td class="box">sndbit</td><td>sound effects supported by device</td><td>EVIOCGBIT(EV_SND..)</td></tr>
+<tr><td class="box">ffbit</td><td>supported force feedback effects, if any</td><td>EVIOCGBIT(EV_FF..)</td></tr>
+<tr><td class="box">swbit</td><td>switches present on the device</td><td>EVIOCGBIT(EV_SW..)</td></tr>
+<tr><td class="box">hint_events_per_packet</td><td>average # of events generated by device</td></tr>
+<tr><td class="box">keycodemax</td><td> size of keycode table</td></tr>
+<tr><td class="box">keycodesize</td><td> size of elements in keycode table</td></tr>
+<tr><td class="box">keycode</td><td>map of scancodes to keycodes for device</td></tr>
+<tr><td class="box">getkeycode</td><td>(legacy) retrieve current keymap.</td></tr>
+<tr> <td class="box">ff</td><td>Force-Feedback, if any</td></tr>
+<tr> <td class="box">repeat_key</td><td>Last pressed key, for auto-repeat</td></tr>
+<tr> <td class="box">timer</td><td>auto-repeat timer</td></tr>
+<tr> <td class="box">rep</td><td>auto-repeat parameters</td></tr>
+<tr> <td class="box">mt</td><td>struct input_mt holding Multitouch state</td></tr>
+<tr> <td class="box">absinfo</td><td>Absolute axes coordinate information</td></tr>
+<tr> <td class="box">key</td><td>current state of device keys/buttons</td><td>EVIOCGKEY</td></tr>
+<tr> <td class="box">led</td><td>current state of device LEDs, if any</td><td>EVIOCGLED</td></tr>
+<tr> <td class="box">sw</td><td>current state of device switches, if any</td><td>EVIOCGSW</td></tr>
+<tr> <td class="box">open</td><td>callback for <code>open(2)</code> on device</td></tr>
+<tr> <td class="box">close</td><td>callback for <code>close(2)</code> on device</td></tr>
+<tr> <td class="box">flush</td><td>flush device events,e.g. force-feedback</td></tr>
+<tr> <td class="box">event</td><td>handler for events sent to device</td></tr>
+</table>
+
+<figcaption>Figure figInputDev: The struct input_dev (from  <code>&lt;linux/input.h&gt;</code>)</figcaption>
+</figure> <!-- figInputDev !-->
+
+<!--- end table!-->
+<div class="pb">&nbsp;</div>
+<p>The input driver registers its <code>input_dev</code>s with the kernel input manager by a call to <code>input_device_register</code>. Doing so will automatically create a sysfs entries (symbolic links) for the device in <path>/sys/class/input</path>, and character device entries, which in turn will be picked up by Linux's <path>udevd</path> (or Android's <path>ueventd</path>) to create corresponding <path>/dev/input/event<i>##</i></path> entries. The character device node is registered under the major of the input manager, with a minor corresponding to its order of registration + 64 (e.g. <path>event0</path> would have minor 64, <path>event1</path> would have minor 65, etc). Operations on the created device node will be handled by an <code>evdev_fops file_operations</code> structure (in <code>&lt;drivers/input/evdev.c&gt;</code>), with generic blocking implementations for read, write, poll, etc. 
+</p>
+
+
+<p>As shown in the figure, the key fields of the <code>input_dev</code> structure are accessible via standard <code>ioctl(2)</code> calls with specific <code>EVIOC*</code> constants. Additionally, the capabilties and properties of a device are exported to user mode via entries in sysfs, under <span class="path">/sys/class/input/event##/device/capabilities/</span> and <span class="path">/sys/class/input/event##/device/properties</span>.
+
+</p>
+
+<a id="evdev" />
+<p>The Linux device drivers respond to interrupts, generated by the respective devices. The drivers then report the events using the <code>input_report_[key/...]</code> functions, and events are then queued onto the <span class="path">/dev/input/event<i>##</i></span> device as structs containing the timestamp, event type, associated code and value. User mode applications use the standard system calls (that is <code>read(2)</code>, <code>select(2)</code>/<code>poll(2)</code> and the like) to retrieve events (always an integer multiple of <code>sizeof(input_event)</code>) from the device. The supported event types are defined in <code>&lt;input/event.h&gt; </code> and shown in table 11-evttypes:
+
+<table class="table" id="11-evttypes">
+ <thead>
+   <tr><th>#</th><th>Event code</th><th>Specifies</th></tr>
+ </thead>
+ <tbody>
+ <tr><td class="centered">0x00</td><td><code>EV_SYN</code></td><td>Separate/synchronize other events (e.g. <code>SYN_REPORT/SYN_MT_REPORT</code>), or report events lost (<code>SYN_DROPPED</code>) </td></tr>
+ <tr><td class="centered">0x01</td><td><code>EV_KEY</code></td><td>Key press (<code>KEY_*</code>) or touch (<code>BTN_TOUCH</code>)</td></tr>
+ <tr><td class="centered">0x02</td><td><code>EV_REL</code></td><td>Relative changes to a property. Changes relayed through <code>REL_[XYZ]</code> values.</td></tr>
+ <tr><td class="centered">0x03</td><td><code>EV_ABS</code></td><td>Absolute coordinates for an event. Values are usually <code>ABS_[XYZ]</code>, or <code>ABS_MT</code> for multi-touch  </td></tr>
+ <tr><td class="centered">0x04</td><td><code>EV_MSC</code></td><td>Miscellaneous codes</td></tr>
+ <tr><td class="centered">0x05</td><td><code>EV_SW</code></td><td>Binary switches. E.g. <code>SW_JACK_PHYSICAL_INSERT</code> for headphone insertion</td></tr>
+ <tr><td class="centered">0x11</td><td><code>EV_LED</code></td><td>Used for device LEDs, if any</td></tr>
+ <tr><td class="centered">0x12</td><td><code>EV_SND</code></td><td>Used for sound devices</td></tr>
+ <tr><td class="centered">0x14</td><td><code>EV_REP</code></td><td>Used for auto-repeating events </td></tr>
+ <tr><td class="centered">0x15</td><td><code>EV_FF</code></td><td>Used for force-feedback capable devices (e.g. joysticks). An EVIOCSFF ioctl may be used to upload force feedback effects</td></tr>
+ <tr><td class="centered">0x16</td><td><code>EV_PWR</code></td><td>Reserved for power events. Largely unused</td></tr>
+ <tr><td class="centered">0x17</td><td><code>EV_FF_STATUS</code></td><td>Used for force-feedback capable devices. </td></tr>
+ </tbody>
+</table>
+
+</p>
+
+<p>Naturally, not all input devices support all event classes; The <code>input_dev</code> structure maps the various events a particular device supports by its bitmaps, and the device's sysfs entry makes those bitmaps visible in user mode as <path>/sys/class/input/input<i>XX</i>/capabilities</path>. The input event source of each device is in <path>/sys/class/input/input<i>XX</i>/event<i>XX</i>, and also conveniently symlinked directly from <path>/sys/class/input</path>. 
+</p>
+
+<p>
+Note, that even though the Linux input model was designed for HID type devices, it can be used on virtually any devices, including sensors. This is shown in the following experiment.
+</p>
+<div class="pb">&nbsp;</div>
+<div class="experiment" id="lowLevelInputExperiment">
+<span class="title"><img width="32" src="keyboard.png" />Experiment: Looking at low-level input events</span>
+
+<p>You can examine input events yourself through the shell. First, look at the files in <path>/dev/input</path>. On the emulator, you should see something like this:
+
+<pre class="output">
+<code>
+root@generic:/ # <span class="typed">ls -l /dev/input</span>
+crw-rw---- root     input     13,  64 2013-11-15 18:24 event0
+crw-rw---- root     input     13,  63 2013-11-15 18:24 mice
+crw-rw---- root     input     13,  32 2013-11-15 18:24 mouse0
+</code>
+</pre>
+
+Output on a real device will likely be different, as these have many more input channels, mapped to its various sensors; The Samsung S3, for example, has event0 through event13, and no "mouse0". The major and minor numbers, however, should be the same, and the major (13) is associated with the kernel input driver subsystems (as can be verified with <code>grep input /proc/devices</code>).
+</code>
+</p>
+<p>
+The system keeps track of all devices quite conveniently in <path>/proc/bus/input/devices</path>:
+
+<pre id="i-pbid" class="output">
+<code>
+shell@htc_m8wl:/ $ <span class="typed">cat /proc/bus/input/devices </span>
+I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+N: Name="h2w headset"
+P: Phys=
+S: Sysfs=/devices/virtual/input/input6
+U: Uniq=
+H: Handlers=kbd event6 keychord 
+B: PROP=0
+B: EV=3
+B: KEY=84 10000 138 0 e0800 0 0 0
+..
+</code>
+</pre>
+
+
+To see the properties and capabilities of a given device, say <path>/dev/input/event0</path>, examine its sysfs entry:
+
+<pre class="output">
+<code>
+<span class="annotation">## File sizes are reported as 4k (pagesize) arbitrarily - all virtual anyway</span>
+shell@generic:/sys/class/input/event0$ <span class="typed">ls -l</span>
+-r--r--r-- root  root 4096  2013-11-15 18:24 dev
+lrwxrwxrwx root  root       2013-11-15 18:24 device -> ../../input0
+drwxr-xr-x root  root       2013-11-15 18:24 power
+lrwxrwxrwx root  root       2013-11-15 18:24 subsystem -> ../../../../../class/input
+-rw-r--r-- root  root 4096  2013-11-15 18:24 uevent
+root@generic:/sys/class/input/event0 # <span class="typed">cat uevent</span>
+MAJOR=13
+MINOR=64
+DEVNAME=input/event0
+</code>
+</pre>
+
+</p>
+<p>
+By accessing the device nodes, you can treat the input sources as files, and by using a command such as "cat" on them, dump raw events directly to standard output, though those would be appear to be nothing more than synchronized garbage. A better way would be to use the <path>getevent</path> command, which is part of <path>toolbox</path>. The source for this tool is at <path>system/core/toolbox/getevent.c</path>.
+</p>
+
+<p>
+When used as <path>getevent</path>, <path>toolbox</path> invokes <code>getevent_main()</code>, which uses Linux's inotify to enumerate the files in <path>/dev/input/event</path>. It then opens each detected device, and uses the <code>ioctl</code>s from the previous table to obtain the device information. Finally, it adds the device to an array of file descriptors which it polls continuously. As each device (event source) signals input, <path>getevent</path> reads the event records and dumps it to stdout.
+
+</p>
+<p>
+<path>getevent</path> has several particularly useful switches:
+<ul>
+ <li> <path>-i</path>: Show HID codes and other information</li>
+ <li> <path>-l</path>: Show numbers in human readable constant form (e.g. "0001" as KEY_ESC)</li>
+ <li> <path>-p</path>: Show device capabilities (as per sysfs capabilities file) and exit</li>
+ <li> <path>-t</path>: Show timestamps</li>
+ <li> <path>-h</path>: Show help on all switches (-n, -t, -s, -S, -v, -d, -p, -i, -l, -q, -c and -r) then exit</li>
+</ul>
+</p>
+</div>
+<div class="pbWithMargin">&nbsp;</div>
+<div class="experiment">
+<span class="title"><img width="32" src="keyboard.png" />Experiment: Looking at low-level input events (cont.)</span>
+<p> Armed with this information, you can conduct this simple experiment: Make sure your display isn't sleeping, then run <path>getevent -l</path> via adb on your device (or emulator), and then touch the screen. On the emulator, you should see output similar to the following:
+<pre class="output">
+<code>
+shell@generic:/$ <span class="typed">getevent -l</span>
+could not get driver version for /dev/input/mouse0, Not a typewriter
+add device 1: /dev/input/event0
+  name:     "qwerty2"
+could not get driver version for /dev/input/mice, Not a typewriter
+/dev/input/event0: EV_ABS  ABS_X                00000083 <span class="annotation"># X position of touch</span>
+/dev/input/event0: EV_ABS  ABS_Y                00000129 <span class="annotation"># Y position of touch</span>
+/dev/input/event0: EV_KEY  BTN_TOUCH            DOWN     <span class="annotation"># Touch start</span>       
+/dev/input/event0: EV_SYN  SYN_REPORT           00000000 <span class="annotation"># Event "terminator"</span>
+/dev/input/event0: EV_KEY  BTN_TOUCH            UP       <span class="annotation"># Touch end</span>
+/dev/input/event0: EV_SYN  SYN_REPORT           00000000 <span class="annotation"># Event "terminator"</span> 
+</code>
+</pre>
+
+On a real device (for example, the Samsung S3) you'll see much more output, owing to the myriad input sources it has. The msm8960 sensors, for example, are what enables headphone vendors to control music playing and call answering through the headphone jack.
+
+<pre class="output">
+<code>
+shell@s3:/$ <span class="typed">getevent -l</span>
+<span class="annotation">## getevent will display all enumerated devices:</span>
+add device 1: /dev/input/event6   name:     "sec_touchscreen"
+add device 2: /dev/input/event8   name:     "barometer_sensor"
+add device 3: /dev/input/event4   name:     "sec_jack"
+add device 4: /dev/input/event3   name:     "light_sensor"
+add device 5: /dev/input/event2   name:     "proximity_sensor"
+add device 6: /dev/input/event0   name:     "sii9234_rcp"
+add device 7: /dev/input/event12  name:     "msm8960-snd-card Headset Jack"
+add device 8: /dev/input/event11  name:     "msm8960-snd-card Button Jack"
+add device 9: /dev/input/event10  name:     "msm8960-snd-card Volumeup Jack"
+add device 10: /dev/input/event9  name:     "msm8960-snd-card Volumedown Jack"
+add device 11: /dev/input/event13 name:     "sec_touchkey"
+add device 12: /dev/input/event1  name:     "fsa9485"       
+add device 13: /dev/input/event5  name:     "sec_keys"         <span class="annotation"># physical keys</span>
+add device 14: /dev/input/event7  name:     "sec_powerkey"     <span class="annotation"># power button - KEY_POWER</span>
+<span class="annotation"># These are sent regularly from the light sensor, as it's highly sensitive</span>
+/dev/input/event3: EV_REL  REL_X                00000020            
+/dev/input/event3: EV_REL  REL_Y                00000021            
+/dev/input/event3: EV_REL  REL_Z                00000015            
+/dev/input/event3: EV_REL  REL_MISC             00000024            
+/dev/input/event3: EV_SYN  SYN_REPORT           00000000            
+<span class="annotation">## Touch event: Notice ABS_MT is used here, rather than BTN_TOUCH</span>
+/dev/input/event6: EV_ABS  ABS_MT_TRACKING_ID   00000043 <span class="annotation"># unique ID for this touch</span>           
+/dev/input/event6: EV_ABS  ABS_MT_WIDTH_MAJOR   0000000a <span class="annotation"># major axis of approaching ellipse</span>           
+/dev/input/event6: EV_ABS  ABS_MT_POSITION_X    0000011f <span class="annotation"># center x touch position</span>          
+/dev/input/event6: EV_ABS  ABS_MT_POSITION_Y    0000022d <span class="annotation"># center y touch position</span>
+/dev/input/event6: EV_ABS  ABS_MT_TOUCH_MAJOR   00000010 <span class="annotation"># major axis of touch ellipse</span>
+/dev/input/event6: EV_ABS  ABS_MT_TOUCH_MINOR   0000000c <span class="annotation"># minor axis of touch ellipse</span>
+/dev/input/event6: EV_ABS  ABS_MT_TOOL_X        ffffffc4 <span class="annotation"># center y tool position</span>
+<span class="annotation">## Physical buttons: HOME and VOLUMEDOWN together (notice /dev/input/event5)</span>
+/dev/input/event5: EV_KEY  KEY_VOLUMEDOWN       DOWN         
+/dev/input/event5: EV_SYN  SYN_REPORT           00000000       
+/dev/input/event5: EV_KEY  KEY_HOMEPAGE         DOWN                
+/dev/input/event5: EV_SYN  SYN_REPORT           00000000       
+/dev/input/event5: EV_KEY  KEY_VOLUMEDOWN       UP         
+/dev/input/event5: EV_SYN  SYN_REPORT           00000000       
+/dev/input/event5: EV_KEY  KEY_HOMEPAGE         UP
+/dev/input/event5: EV_SYN  SYN_REPORT           00000000       
+</code>
+</pre>
+
+</div>
+
+<div class="pb">&nbsp;</div>
+<div class="experiment" id="simulatingLevelInputExperiment">
+<span class="title"><img width="32" src="keyboard.png" />Experiment: Simulating low-level events with <code>sendevent</code></span>
+
+<p>As it so happens, toolbox also has a <code>sendevent</code> tool which you can use to simulate events at the lowest level, by writing directly to the <path>/dev/input/eventXX</path> device nodes. The code itself is <a href="http://newandroidbook.com/src/KitKat/system/core/toolbox/sendevent.c">straightforward</a>, constructing an <code>input_event</code> from the command line, and calling <code>write(2)</code> to send it to the device node. The caller needs write access to the device node - which the shell provides for you even on non-rooted device thanks to its group membership in the <path>input</path> group.</p>
+
+<p>Using this tool alongside <path>getevent</path> brings out the real usefulness of low-level UI Automation: With <path>getevent</path>, you can record input events - touch, swipe, and physical button events on most devices, but even sensor readings like orientation, proximity and light (on those devices which support it, like the Samsung S3, above). You can then replay them with <path>sendevent</path>. There are only two caveats to remember: 
+
+<ol>
+ <li>While <path>getevent</path> spits out the events in hexadecimal, <path>sendevent</path> will expect decimal input. So you will have to do the conversion yourself (or use a simple script to do so)</li>
+ <li>Most events, though atomic to the user, are broken up into multiple components, and require the <code>SYN_REPORT</code> synthetic event to act as a delimiter. It's therefore important to send that event at the end of the sequence.</li>
+</ol>
+
+The following example shows a simulation of pressing the home button on an S3. since the EV_KEY constants are the same across Linux (and Android) versions, the only adaptation required for other devices would be the figuring out which <path>/dev/input/eventXX</path> node to use. Continuing the previous output, we would have something like:
+
+<pre class="output">
+<code>
+<span class="annotation"># simulate EV_KEY KEYHOMEPAGE DOWN followed by REPORT</span>
+shell@s3$ <span class="typed">sendevent /dev/input/event5 1 172 1; sendevent /dev/input5 0 0 0</span>
+<span class="annotation"># To simulate home button hold, delay the following line, simulating the UP/REPORT</span>
+shell@s3$ <span class="typed">sendevent /dev/input/event5 1 172 0; sendevent /dev/input5 0 0 0 </span>
+</code>
+</pre>
+
+
+<p>As we continue traversing up the input stack, the next experiment you encounter will introduce you to yet another method of simulating input events.</p>
+
+
+</div> <!-- LowLevelInputExperiment !-->
+
+</section>
+
+<div class="pb">&nbsp;</div>
+<a id="native"/><h2>Input Handling at the Android Native Layer</h2>
+... (not part of this preview)...
+<div id="filler" style="height : 100px">&nbsp;</div>
+
+</section>
+</article>
+</html>
